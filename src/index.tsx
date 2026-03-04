@@ -89,14 +89,14 @@ function includeWTrackerMessages<T extends Message | ChatMessage>(messages: T[],
       if (foundMessage) {
         const extra =
           'source' in foundMessage ? (foundMessage as Message).source?.extra : (foundMessage as ChatMessage).extra;
-        const content = `Tracker:\n\`\`\`json\n${JSON.stringify(extra?.[EXTENSION_KEY]?.[CHAT_MESSAGE_SCHEMA_VALUE_KEY] || '{}', null, 2)}\n\`\`\``;
-        copyMessages.splice(foundIndex + 1, 0, {
+        const content = `Status:\n\`\`\`json\n${JSON.stringify(extra?.[EXTENSION_KEY]?.[CHAT_MESSAGE_SCHEMA_VALUE_KEY] || '{}', null, 2)}\n\`\`\``;
+        copyMessages.splice(foundIndex, 0, {
           content,
-          role: 'user',
-          name: name1,
-          is_user: true,
+          role: 'system',
+          name: '',
+          is_user: false,
           mes: content,
-          is_system: false,
+          is_system: true,
         } as unknown as T);
       }
     }
