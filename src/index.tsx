@@ -68,6 +68,67 @@ function renderTracker(messageId: number) {
   messageBlock.querySelector('.mes_text')?.before(container);
 }
 
+function normalizeAvatarRef(value?: string): string | undefined {
+  if (!value || typeof value !== 'string') return undefined;
+
+  let normalized = value.trim();
+  if (!normalized) return undefined;
+
+  // Handle thumbnail URLs like /thumbnail?type=avatar&file=char.png
+  const queryIndex = normalized.indexOf('?');
+  if (queryIndex !== -1) {
+    const query = normalized.substring(queryIndex + 1);
+    const params = new URLSearchParams(query);
+    const fileParam = params.get('file');
+    if (fileParam) {
+      normalized = fileParam;
+    }
+  }
+
+  try {
+    normalized = decodeURIComponent(normalized);
+  } catch {
+    // Keep original value when decode fails.
+  }
+
+  const slashIndex = Math.max(normalized.lastIndexOf('/'), normalized.lastIndexOf('\\'));
+  if (slashIndex !== -1) {
+    normalized = normalized.substring(slashIndex + 1);
+  }
+
+  return normalized.trim() || undefined;
+}
+
+function getIgnoredAvatarSet(): Set<string> {
+  const ignoreList: string[] = (SillyTavern.getContext().chatMetadata as any)?.[CHAT_METADATA_WTRACKER_IGNORE_KEY] ?? [];
+  return new Set(ignoreList.map((item) => normalizeAvatarRef(item)).filter((item): item is string => !!item));
+}
+
+function getGroupMemberAvatar(member: JQuery): string | undefined {
+  const charId = member.attr('chid');
+  if (charId !== undefined) {
+    const char = (characters as any)[charId];
+    const avatar = normalizeAvatarRef(char?.avatar);
+    if (avatar) return avatar;
+  }
+
+  // Fallback for future DOM shape changes.
+  const src = member.find('img').first().attr('src');
+  return normalizeAvatarRef(src);
+}
+
+function ensureWTrackerButtonForMember(member: JQuery): void {
+  if (!member.hasClass('group_member')) return;
+  if (member.find('.ignore_wtracker_toggle').length > 0) return;
+
+  const icon = member.find('.group_member_icon').first();
+  if (!icon.length) return;
+
+  icon.before(
+    '<div title="Disable WTracking" class="ignore_wtracker_toggle fa-solid fa-eye-slash right_menu_button fa-lg interactable" tabindex="0"></div>',
+  );
+}
+
 function includeWTrackerMessages<T extends Message | ChatMessage>(messages: T[], settings: ExtensionSettings): T[] {
   let copyMessages = structuredClone(messages);
   if (settings.includeLastXWTrackerMessages > 0) {
@@ -185,12 +246,10 @@ async function editTracker(messageId: number) {
 
 function updateWTrackerMemberButton(member: JQuery): void {
   const button = member.find('.ignore_wtracker_toggle');
-  const charId = member.attr('chid');
-  if (!charId) return;
-  const charAvatar = (characters as any)[charId]?.avatar;
+  const charAvatar = getGroupMemberAvatar(member);
   if (!charAvatar) return;
-  const ignoreList: string[] = (SillyTavern.getContext().chatMetadata as any)?.[CHAT_METADATA_WTRACKER_IGNORE_KEY] ?? [];
-  if (ignoreList.includes(charAvatar)) {
+
+  if (getIgnoredAvatarSet().has(charAvatar)) {
     button.addClass('active');
   } else {
     button.removeClass('active');
@@ -199,27 +258,35 @@ function updateWTrackerMemberButton(member: JQuery): void {
 
 function updateAllWTrackerMemberButtons(): void {
   $('#rm_group_members .group_member').each((_i, el) => {
-    updateWTrackerMemberButton($(el));
+    const member = $(el);
+    ensureWTrackerButtonForMember(member);
+    updateWTrackerMemberButton(member);
   });
 }
 
 function toggleWTrackerForMember(e: Event): void {
   const target = $(e.target as HTMLElement).closest('.group_member');
-  const charId = target.attr('chid');
-  if (!charId) return;
-  const charAvatar = (characters as any)[charId]?.avatar;
+  const charAvatar = getGroupMemberAvatar(target);
   if (!charAvatar) return;
+
   const context = SillyTavern.getContext();
   const chatMetadata = context.chatMetadata as any;
   if (!chatMetadata[CHAT_METADATA_WTRACKER_IGNORE_KEY]) {
     chatMetadata[CHAT_METADATA_WTRACKER_IGNORE_KEY] = [];
   }
-  const ignoreList: string[] = chatMetadata[CHAT_METADATA_WTRACKER_IGNORE_KEY];
-  if (ignoreList.includes(charAvatar)) {
-    chatMetadata[CHAT_METADATA_WTRACKER_IGNORE_KEY] = ignoreList.filter((a) => a !== charAvatar);
+  const normalizedAvatar = normalizeAvatarRef(charAvatar);
+  if (!normalizedAvatar) return;
+
+  const rawIgnoreList: string[] = chatMetadata[CHAT_METADATA_WTRACKER_IGNORE_KEY];
+  const ignoreSet = new Set(rawIgnoreList.map((a) => normalizeAvatarRef(a)).filter((a): a is string => !!a));
+
+  if (ignoreSet.has(normalizedAvatar)) {
+    ignoreSet.delete(normalizedAvatar);
   } else {
-    ignoreList.push(charAvatar);
+    ignoreSet.add(normalizedAvatar);
   }
+
+  chatMetadata[CHAT_METADATA_WTRACKER_IGNORE_KEY] = Array.from(ignoreSet);
   context.saveMetadataDebounced();
   updateWTrackerMemberButton(target);
 }
@@ -229,8 +296,11 @@ async function generateTracker(id: number) {
   if (!message) return st_echo('error', `Message with ID ${id} not found.`);
 
   // Skip generation if this character is excluded from WTracking
-  const ignoreList: string[] = (globalContext.chatMetadata as any)?.[CHAT_METADATA_WTRACKER_IGNORE_KEY] ?? [];
-  if (message.original_avatar && ignoreList.includes(message.original_avatar)) return;
+  const ignoredAvatars = getIgnoredAvatarSet();
+  const messageAvatar = normalizeAvatarRef(
+    (message as any).original_avatar ?? (message as any).force_avatar ?? (message as any).avatar,
+  );
+  if (messageAvatar && ignoredAvatars.has(messageAvatar)) return;
 
   if (pendingRequests.has(id)) {
     const requestId = pendingRequests.get(id)!;
@@ -403,13 +473,28 @@ async function initializeGlobalUI() {
       for (const mutation of mutationList) {
         if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
           mutation.addedNodes.forEach((node) => {
-            updateWTrackerMemberButton($(node as HTMLElement));
+            const element = node as HTMLElement;
+            const nodeAsMember = $(element);
+            if (nodeAsMember.hasClass('group_member')) {
+              ensureWTrackerButtonForMember(nodeAsMember);
+              updateWTrackerMemberButton(nodeAsMember);
+            }
+
+            $(element)
+              .find('.group_member')
+              .each((_i, child) => {
+                const childMember = $(child);
+                ensureWTrackerButtonForMember(childMember);
+                updateWTrackerMemberButton(childMember);
+              });
           });
         }
       }
     });
     observer.observe(groupMemberList, { childList: true, subtree: true });
   }
+
+  updateAllWTrackerMemberButtons();
 
   // Add WTracker icon to message buttons
   const wTrackerIcon = document.createElement('div');
