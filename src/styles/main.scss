@@ -25,8 +25,26 @@
   animation: spin 2s linear infinite;
 }
 
-.ignore_wtracker_toggle.active {
-  color: var(--active_button_color, #ff4d4d);
+#rm_group_members .ignore_wtracker_toggle {
+	margin-right: 10px;
+}
+
+#rm_group_members .ignore_wtracker_toggle {
+	transition: all 0.2s ease-in-out;
+}
+
+#rm_group_members .ignore_wtracker_toggle:not(.active) {
+	opacity: 0.4;
+	filter: brightness(0.5);
+}
+
+#rm_group_members .ignore_wtracker_toggle.active {
+	filter: drop-shadow(0px 0px 5px rgb(65, 210, 243));
+}
+
+#rm_group_members .ignore_wtracker_toggle:hover {
+	opacity: inherit;
+	filter: drop-shadow(0px 0px 5px rgb(65, 210, 243));
 }
 
 .mes_wtracker {

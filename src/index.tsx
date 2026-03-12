@@ -125,7 +125,7 @@ function ensureWTrackerButtonForMember(member: JQuery): void {
   if (!icon.length) return;
 
   icon.before(
-    '<div title="Disable WTracking" class="ignore_wtracker_toggle fa-solid fa-eye-slash right_menu_button fa-lg interactable" tabindex="0"></div>',
+    '<div title="Disable WTracking" class="ignore_wtracker_toggle fa-solid fa-file-pen right_menu_button fa-lg interactable" tabindex="0"></div>',
   );
 }
 
@@ -250,9 +250,9 @@ function updateWTrackerMemberButton(member: JQuery): void {
   if (!charAvatar) return;
 
   if (getIgnoredAvatarSet().has(charAvatar)) {
-    button.addClass('active');
-  } else {
     button.removeClass('active');
+  } else {
+    button.addClass('active');
   }
 }
 
@@ -462,7 +462,7 @@ async function generateTracker(id: number) {
 async function initializeGlobalUI() {
   // Add toggle button to group member list entries
   const groupMemberTemplateIcons = $('.group_member_icon');
-  const ignoreWTrackerButton = $(`<div title="Disable WTracking" class="ignore_wtracker_toggle fa-solid fa-eye-slash right_menu_button fa-lg interactable" tabindex="0"></div>`);
+  const ignoreWTrackerButton = $(`<div title="Disable WTracking" class="ignore_wtracker_toggle fa-solid fa-file-pen right_menu_button fa-lg interactable" tabindex="0"></div>`);
   groupMemberTemplateIcons.before(ignoreWTrackerButton);
 
   $('#rm_group_members').on('click', '.ignore_wtracker_toggle', toggleWTrackerForMember);
