@@ -25,6 +25,10 @@
   animation: spin 2s linear infinite;
 }
 
+.ignore_wtracker_toggle.active {
+  color: var(--active_button_color, #ff4d4d);
+}
+
 .mes_wtracker {
 	position: relative;
 

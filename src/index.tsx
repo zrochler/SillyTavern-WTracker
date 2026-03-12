@@ -14,6 +14,7 @@ import { POPUP_RESULT, POPUP_TYPE } from 'sillytavern-utils-lib/types/popup';
 
 // --- Constants and Globals ---
 const CHAT_METADATA_SCHEMA_PRESET_KEY = 'schemaKey';
+const CHAT_METADATA_WTRACKER_IGNORE_KEY = 'wtracker_ignore';
 const CHAT_MESSAGE_SCHEMA_VALUE_KEY = 'value';
 const CHAT_MESSAGE_SCHEMA_HTML_KEY = 'html';
 
@@ -180,9 +181,56 @@ async function editTracker(messageId: number) {
   }
 }
 
+// --- Group Member WTracker Toggle ---
+
+function updateWTrackerMemberButton(member: JQuery): void {
+  const button = member.find('.ignore_wtracker_toggle');
+  const charId = member.attr('chid');
+  if (!charId) return;
+  const charAvatar = (characters as any)[charId]?.avatar;
+  if (!charAvatar) return;
+  const ignoreList: string[] = (SillyTavern.getContext().chatMetadata as any)?.[CHAT_METADATA_WTRACKER_IGNORE_KEY] ?? [];
+  if (ignoreList.includes(charAvatar)) {
+    button.addClass('active');
+  } else {
+    button.removeClass('active');
+  }
+}
+
+function updateAllWTrackerMemberButtons(): void {
+  $('#rm_group_members .group_member').each((_i, el) => {
+    updateWTrackerMemberButton($(el));
+  });
+}
+
+function toggleWTrackerForMember(e: Event): void {
+  const target = $(e.target as HTMLElement).closest('.group_member');
+  const charId = target.attr('chid');
+  if (!charId) return;
+  const charAvatar = (characters as any)[charId]?.avatar;
+  if (!charAvatar) return;
+  const context = SillyTavern.getContext();
+  const chatMetadata = context.chatMetadata as any;
+  if (!chatMetadata[CHAT_METADATA_WTRACKER_IGNORE_KEY]) {
+    chatMetadata[CHAT_METADATA_WTRACKER_IGNORE_KEY] = [];
+  }
+  const ignoreList: string[] = chatMetadata[CHAT_METADATA_WTRACKER_IGNORE_KEY];
+  if (ignoreList.includes(charAvatar)) {
+    chatMetadata[CHAT_METADATA_WTRACKER_IGNORE_KEY] = ignoreList.filter((a) => a !== charAvatar);
+  } else {
+    ignoreList.push(charAvatar);
+  }
+  context.saveMetadataDebounced();
+  updateWTrackerMemberButton(target);
+}
+
 async function generateTracker(id: number) {
   const message = globalContext.chat[id];
   if (!message) return st_echo('error', `Message with ID ${id} not found.`);
+
+  // Skip generation if this character is excluded from WTracking
+  const ignoreList: string[] = (globalContext.chatMetadata as any)?.[CHAT_METADATA_WTRACKER_IGNORE_KEY] ?? [];
+  if (message.original_avatar && ignoreList.includes(message.original_avatar)) return;
 
   if (pendingRequests.has(id)) {
     const requestId = pendingRequests.get(id)!;
@@ -342,6 +390,27 @@ async function generateTracker(id: number) {
 // --- UI Initialization (Non-React parts) ---
 
 async function initializeGlobalUI() {
+  // Add toggle button to group member list entries
+  const groupMemberTemplateIcons = $('.group_member_icon');
+  const ignoreWTrackerButton = $(`<div title="Disable WTracking" class="ignore_wtracker_toggle fa-solid fa-eye-slash right_menu_button fa-lg interactable" tabindex="0"></div>`);
+  groupMemberTemplateIcons.before(ignoreWTrackerButton);
+
+  $('#rm_group_members').on('click', '.ignore_wtracker_toggle', toggleWTrackerForMember);
+
+  const groupMemberList = document.getElementById('rm_group_members');
+  if (groupMemberList) {
+    const observer = new MutationObserver((mutationList) => {
+      for (const mutation of mutationList) {
+        if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
+          mutation.addedNodes.forEach((node) => {
+            updateWTrackerMemberButton($(node as HTMLElement));
+          });
+        }
+      }
+    });
+    observer.observe(groupMemberList, { childList: true, subtree: true });
+  }
+
   // Add WTracker icon to message buttons
   const wTrackerIcon = document.createElement('div');
   wTrackerIcon.title = 'WTracker';
@@ -394,6 +463,7 @@ async function initializeGlobalUI() {
     (messageId: number) => outgoingTypes.includes(settings.autoMode) && generateTracker(messageId),
   );
   globalContext.eventSource.on(EventNames.CHAT_CHANGED, () => {
+    updateAllWTrackerMemberButtons();
     const { saveChat } = globalContext;
     let chatModified = false;
     globalContext.chat.forEach((message, i) => {
