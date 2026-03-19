@@ -151,7 +151,7 @@ function includeWTrackerMessages<T extends Message | ChatMessage>(messages: T[],
       if (foundMessage) {
         const extra =
           'source' in foundMessage ? (foundMessage as Message).source?.extra : (foundMessage as ChatMessage).extra;
-        const content = `Status:\n\`\`\`json\n${JSON.stringify(extra?.[EXTENSION_KEY]?.[CHAT_MESSAGE_SCHEMA_VALUE_KEY] || '{}', null, 2)}\n\`\`\``;
+        const content = `Tracker:\n\`\`\`json\n${JSON.stringify(extra?.[EXTENSION_KEY]?.[CHAT_MESSAGE_SCHEMA_VALUE_KEY] || '{}', null, 2)}\n\`\`\``;
         copyMessages.splice(foundIndex, 0, {
           content,
           role: 'system',
