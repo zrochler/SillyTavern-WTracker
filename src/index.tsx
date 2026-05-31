@@ -135,7 +135,7 @@ function includeWTrackerMessages<T extends Message | ChatMessage>(messages: T[],
     for (let i = 0; i < settings.includeLastXWTrackerMessages; i++) {
       let foundMessage: T | null = null;
       let foundIndex = -1;
-      for (let j = copyMessages.length - 2; j >= 0; j--) {
+      for (let j = copyMessages.length - 1; j >= 0; j--) {
         // -2 to skip current message
         const message = copyMessages[j];
         const extra = 'source' in message ? (message as Message).source?.extra : (message as ChatMessage).extra;
@@ -164,14 +164,14 @@ function includeWTrackerMessages<T extends Message | ChatMessage>(messages: T[],
     }
   }
   for (let j = copyMessages.length - 1; j >= 0; j--) {
-        // -2 to skip current message
-        const message = copyMessages[j];
-        const extra = 'source' in message ? (message as Message).source?.extra : (message as ChatMessage).extra;
-        if (extra?.reasoning) {
-          // @ts-ignore
-          extra.reasoning = "";
-        }
-      } 
+    // -2 to skip current message
+    const message = copyMessages[j];
+    const extra = 'source' in message ? (message as Message).source?.extra : (message as ChatMessage).extra;
+    if (extra?.reasoning) {
+      // @ts-ignore
+      extra.reasoning = "";
+    }
+  }
   return copyMessages;
 }
 
